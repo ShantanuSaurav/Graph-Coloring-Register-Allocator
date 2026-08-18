@@ -5,6 +5,8 @@ coalescing and optimistic spilling.
 
 **Course:** BCSE307 Compiler Design · **Project ID:** A5 · **Team:** \_\_
 
+🚀 **Live Web App (Vercel Frontend):** [https://graph-coloring-register-allocator.vercel.app/](https://graph-coloring-register-allocator.vercel.app/)
+
 ---
 
 ## What this does
