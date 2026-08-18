@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chaitin-Briggs Graph-Coloring Register Allocator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <!-- d3 and d3-graphviz for rendering DOT graph -->
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <script src="https://unpkg.com/@hpcc-js/wasm@2.13.0/dist/index.min.js"></script>
+    <script src="https://unpkg.com/d3-graphviz@3.0.5/build/d3-graphviz.js"></script>
+</head>
+<body>
+    <div class="background-glow"></div>
+    <main class="container">
+        <header>
+            <h1>Register Allocator <span class="badge">M2</span></h1>
+            <p>Visualize interference graphs using Chaitin-Briggs heuristics.</p>
+        </header>
+
+        <div class="layout">
+            <section class="editor-section">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h2>Three-Address Code (TAC)</h2>
+                        <button id="analyze-btn" class="primary-btn">Parse & Analyze</button>
+                    </div>
+                    <textarea id="tac-input" spellcheck="false">func main
+  t1 = 1
+  t2 = 2
+  t3 = t1 + t2
+  t4 = t3
+  t5 = t4 * 2
+  ret t5
+end</textarea>
+                </div>
+            </section>
+
+            <section class="results-section">
+                <div class="panel summary-panel">
+                    <div class="panel-header">
+                        <h2>Parser Summary</h2>
+                    </div>
+                    <pre id="summary-output" class="output-box">Output will appear here...</pre>
+                </div>
+                
+                <div class="panel graph-panel">
+                    <div class="panel-header">
+                        <h2>Interference Graph</h2>
+                    </div>
+                    <div id="graph-output" class="output-box graph-container"></div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
