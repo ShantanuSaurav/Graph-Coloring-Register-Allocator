@@ -15,8 +15,8 @@
     <div class="background-glow"></div>
     <main class="container">
         <header>
-            <h1>Register Allocator <span class="badge">M2</span></h1>
-            <p>Visualize interference graphs using Chaitin-Briggs heuristics.</p>
+            <h1>Register Allocator <span class="badge">Chaitin&ndash;Briggs</span></h1>
+            <p>Parse, build the interference graph, and colour it with K physical registers.</p>
         </header>
 
         <div class="layout">
@@ -24,7 +24,12 @@
                 <div class="panel">
                     <div class="panel-header">
                         <h2>Three-Address Code (TAC)</h2>
-                        <button id="analyze-btn" class="primary-btn">Parse & Analyze</button>
+                        <div class="panel-controls">
+                            <label for="k-input" class="k-label">K
+                                <input id="k-input" type="number" min="1" max="32" value="4" />
+                            </label>
+                            <button id="analyze-btn" class="primary-btn">Parse & Analyze</button>
+                        </div>
                     </div>
                     <textarea id="tac-input" spellcheck="false">func main
   t1 = 1

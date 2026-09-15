@@ -35,15 +35,27 @@ cd regalloc-a5
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# Parse a program and dump its CFG (this part works today)
-python -m src.cli benchmarks/simple.tac --dump-cfg
+# Parse a program and dump its CFG and liveness
+python -m src.cli benchmarks/simple.tac --dump-cfg --dump-live
 
-# Full allocation (once the analysis and colouring modules are implemented)
+# Full allocation: parse -> CFG -> liveness -> interference -> coalesce -> colour
+# -> spill and retry if K isn't enough -> final allocated program
 python -m src.cli benchmarks/simple.tac --k 8
+
+# Force spilling to see the rewrite/retry loop in action
+python -m src.cli benchmarks/high_pressure.tac --k 4
+
+# Write the interference graph out as Graphviz DOT (render with `dot -Tpng`)
+python -m src.cli benchmarks/briggs_example.tac --k 3 --dump-graph graph.dot
 
 # Run the tests
 pytest -v
 ```
+
+The full pipeline is implemented and working end to end — parsing, CFG/loop-depth
+construction, liveness, interference-graph construction, Briggs coalescing,
+simplify/select colouring, and the spill/rewrite/retry loop. `pytest -v` runs 87
+tests covering all of it (see [Testing](#testing) below).
 
 ---
 
@@ -111,10 +123,10 @@ members can work in parallel.
 
 | Module | Owner | Responsibility | Status |
 |---|---|---|---|
-| `frontend/` | M1 — \_\_\_\_\_\_ | Tokenize, parse, build CFG, compute loop depth | Parser done; CFG in progress |
-| `analysis/` | M2 — \_\_\_\_\_\_ | Live-variable dataflow, interference graph | Not started |
-| `colouring/` | M3 — \_\_\_\_\_\_ | Briggs coalescing, simplify, select | Not started |
-| `spilling/` | M4 — \_\_\_\_\_\_ | Spill cost, candidate choice, code rewriting | Not started |
+| `frontend/` | M1 — \_\_\_\_\_\_ | Tokenize, parse, build CFG, compute loop depth | Done |
+| `analysis/` | M2 — \_\_\_\_\_\_ | Live-variable dataflow, interference graph | Done |
+| `colouring/` | M3 — \_\_\_\_\_\_ | Briggs coalescing, simplify, select | Done |
+| `spilling/` | M4 — \_\_\_\_\_\_ | Spill cost, candidate choice, code rewriting, retry loop | Done |
 
 Every module has a named secondary reviewer so no component has a single point of failure.
 
@@ -151,7 +163,73 @@ Chaitin–Briggs, in six stages:
    then rebuild and re-run from step 1.
 
 The loop terminates because each iteration removes at least one live range from
-contention and the replacement ranges are very short. Capped at 10 iterations.
+contention and the replacement ranges are very short. Capped at 10 iterations
+(`spilling.spiller.MAX_ITERATIONS`).
+
+---
+
+## Testing
+
+```bash
+pytest -v
+```
+
+87 tests across `tests/test_parser.py`, `test_cfg.py`, `test_liveness.py`,
+`test_interference.py`, `test_colouring.py` and `test_spilling.py`. Coverage includes:
+straight-line/branch/loop/nested-loop CFGs and predecessor/successor consistency across
+every benchmark; use/def and fixed-point liveness including a diamond join; the
+interference graph against a hand-verified edge set (see the correction note below);
+simplify/select at K = 1..4 including the "optimistic push beats naive Chaitin" case;
+Briggs coalescing (both a safe merge and a correctly-refused interfering one); spill
+cost and its loop-depth weighting; `choose_spill`'s cost/degree ratio, including the
+degree-0 guard; fresh-name reload generation; a regression test for a slot-numbering
+bug the spill/retry loop used to have (below); and full-pipeline convergence on every
+benchmark.
+
+## Try it against every benchmark
+
+```bash
+for f in benchmarks/*.tac; do
+  for k in 1 2 3 4 8; do
+    python -m src.cli "$f" --k "$k"
+  done
+done
+```
+
+K = 1 is expected to fail on every benchmark here — architecturally, not as a bug: our
+IR's binary operations and `if..goto` always need two operands live at once, so no
+amount of spilling can make one register enough. Every benchmark succeeds at K ≥ 2.
+
+## Design notes (found while implementing)
+
+Two things came up during implementation that are worth knowing about before the viva,
+because they are the kind of question a reviewer is likely to ask:
+
+1. **The hand-worked `briggs_example` interference graph in
+   `docs/briggs_example_solution.md` was missing an edge** (`t2`–`t4`). `t2` stays live
+   from its own definition until `t5 = t2 + t3`, which is *after* `t4 = t1 + t3` — so
+   `t2` and `t4` are simultaneously live and must interfere, even though neither
+   instruction mentions the other. The doc now has a correction note, and
+   `tests/test_interference.py::test_briggs_example_edge_set_matches_the_worked_example`
+   pins down the verified 9-edge graph.
+
+2. **A naive "spend cost information everywhere" instinct can break termination.**
+   `colouring.allocator.simplify` accepts an optional `cost_fn` so its optimistic push
+   can prefer the *cheapest* node instead of just the highest-degree one. Wiring
+   `spill_cost` into the main pipeline this way looks strictly better — until it hits
+   `briggs_example.tac` at K = 2: a single long-lived value is both the true source of
+   register pressure *and* the most expensive node to spill, so a cost-biased push
+   protects it forever and the loop thrashes on cheap, doomed reload temporaries
+   instead, never converging (verified out to 40 rounds). Dropping the cost bias and
+   using plain highest-degree converges in 4 rounds on the same input. `spiller.py`'s
+   module docstring has the full writeup; `run_allocation` calls `allocate()` without a
+   `cost_fn` for exactly this reason, even though `cost_fn` remains available for
+   experimentation.
+
+Both are explained in more detail right next to the material they concern — the first
+in `docs/briggs_example_solution.md`'s correction note, the second in
+`src/spilling/spiller.py`'s module docstring — specifically so they're easy to find and
+explain rather than being buried in a commit message.
 
 ---
 

@@ -1,12 +1,14 @@
 document.addEventListener('DOMContentLoaded', () => {
     const analyzeBtn = document.getElementById('analyze-btn');
     const tacInput = document.getElementById('tac-input');
+    const kInput = document.getElementById('k-input');
     const summaryOutput = document.getElementById('summary-output');
     const graphOutput = document.getElementById('graph-output');
 
     analyzeBtn.addEventListener('click', async () => {
         const code = tacInput.value;
         if (!code.trim()) return;
+        const k = parseInt(kInput.value, 10) || 4;
 
         // UI Feedback
         analyzeBtn.disabled = true;
@@ -20,7 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ code: code }),
+                body: JSON.stringify({ code: code, k: k }),
             });
 
             const data = await response.json();

@@ -1,10 +1,10 @@
 """M2 — interference graph construction.
 
 Owner: Member 2
-Status: InterferenceGraph is provided and working; build_graph is TODO.
+Status: implemented.
 
 The InterferenceGraph class is a shared contract — M3 (colouring) and M4 (spilling)
-both read it, so keep its interface stable. Only `build_graph` is yours to write.
+both read it, so its interface stays stable.
 """
 
 from __future__ import annotations

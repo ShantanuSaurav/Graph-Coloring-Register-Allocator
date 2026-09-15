@@ -39,8 +39,11 @@ owner's business.
 
 Each actual spill removes one live range from contention and replaces it with several
 very short ones (one per use). Short ranges have few interferences, so they colour
-easily. In practice convergence takes two or three iterations. `MAX_ITERATIONS = 10` in
-`spiller.py` is a safety net, not an expected path.
+easily. In practice convergence takes two to four iterations on every benchmark here
+(`briggs_example.tac` at K=2 is the slowest, at 4). `MAX_ITERATIONS = 10` in
+`spiller.py` is a safety net, not an expected path — see `spiller.py`'s module
+docstring for a concrete case where a naive choice of spill-cost heuristic *would*
+have broken that guarantee, and why the pipeline avoids it.
 
 ## Measuring objective O3
 
