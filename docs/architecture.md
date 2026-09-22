@@ -54,4 +54,32 @@ python -m src.cli bench.tac --k 8 --no-coalesce   # baseline
 python -m src.cli bench.tac --k 8                 # ours
 ```
 
-Compare `count_spill_instructions` on the two outputs. The target is a 20% reduction.
+Compare `count_spill_instructions` on the two outputs, or use
+`scripts/coalescing_experiment.py`, which automates exactly this comparison (see the
+README's "Coalescing ON vs OFF experiment" section) and reports the real,
+non-fabricated result rather than assuming a target reduction holds on every input —
+on `benchmarks/copy_heavy.tac` specifically it does not (spill counts are identical
+ON and OFF at every tested K; see that section for why, and what coalescing *does*
+measurably do there instead — real merges and redundant-move detection).
+
+## Metrics as a single source of truth
+
+`src/metrics.py`'s `AllocationMetrics`/`collect_metrics`/`run_and_collect_metrics`
+were added so the CLI (`--metrics`), the web API (`/api/analyze`'s `metrics` field),
+`scripts/run_benchmarks.py` and `scripts/coalescing_experiment.py` all compute the
+same numbers the same way, instead of four separate ad-hoc counting implementations
+that could silently drift apart. It reads two snapshots of one `run_allocation()`
+call: the *first* iteration's `InterferenceGraph`/`AllocationResult` (captured via
+`run_allocation`'s existing `on_iteration` hook) for graph-structure numbers — nodes,
+edges, degree, coalescing candidates/merges/refusals — and the pipeline's *final*
+`PipelineResult` for outcome numbers — spills, loads, stores, iterations, final
+instruction count. Conflating the two would either describe the wrong "problem size"
+(if spilling already rewrote the graph) or the wrong "result" (if only the first
+attempt were reported), so the module docstring is explicit about which is which.
+
+The `coalesce()`/`allocate()` instrumentation behind the coalescing numbers
+(`coalesce_stats`, `coalesce_trace` on `AllocationResult`) is additive: both default
+to empty/zero values and every existing call site and test from the original
+implementation is unaffected. `coalesce_trace` is a live log of every pair the loop
+actually evaluated, in order, including a pair re-evaluated in a later pass after an
+earlier merge changed its neighbours — it is not reconstructed after the fact.

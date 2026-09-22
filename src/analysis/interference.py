@@ -62,6 +62,13 @@ class InterferenceGraph:
     def edge_count(self) -> int:
         return len(self._edges)
 
+    def edges(self) -> set[frozenset[str]]:
+        """Every interference edge, as an unordered pair. Public read accessor for
+        `_edges`, added for callers (the web API's stage dump, in particular) that
+        need the edge set itself rather than just its count.
+        """
+        return set(self._edges)
+
     def remove_node(self, v: str) -> set[str]:
         """Remove v, returning the neighbours it had. Used by the simplify phase."""
         nbrs = self.adj.pop(v, set())

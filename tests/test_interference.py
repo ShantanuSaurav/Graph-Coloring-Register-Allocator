@@ -63,6 +63,25 @@ def test_move_pairs_recorded():
     assert frozenset(("t1", "t2")) in g.move_pairs
 
 
+def test_edges_accessor_matches_internal_edge_set():
+    """Public accessor added for Review 2's web API stage dump -- must agree with the
+    private `_edges` set the pre-existing tests already introspect directly.
+    """
+    g = InterferenceGraph()
+    g.add_edge("t1", "t2")
+    g.add_edge("t2", "t3")
+    assert g.edges() == g._edges  # noqa: SLF001 (test-only introspection)
+    assert frozenset(("t1", "t2")) in g.edges()
+
+
+def test_edges_accessor_returns_a_copy_not_a_live_reference():
+    g = InterferenceGraph()
+    g.add_edge("t1", "t2")
+    edges = g.edges()
+    edges.add(frozenset(("t9", "t10")))
+    assert frozenset(("t9", "t10")) not in g.edges()
+
+
 def test_dot_output_contains_nodes_and_edges():
     g = InterferenceGraph()
     g.add_edge("t1", "t2")

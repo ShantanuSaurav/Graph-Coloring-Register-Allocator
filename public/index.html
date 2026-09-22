@@ -6,7 +6,7 @@
     <title>Chaitin-Briggs Graph-Coloring Register Allocator</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <!-- d3 and d3-graphviz for rendering DOT graph -->
+    <!-- d3 and d3-graphviz for rendering DOT graphs (interference graph + CFG) -->
     <script src="https://d3js.org/d3.v5.min.js"></script>
     <script src="https://unpkg.com/@hpcc-js/wasm@2.13.0/dist/index.min.js"></script>
     <script src="https://unpkg.com/d3-graphviz@3.0.5/build/d3-graphviz.js"></script>
@@ -16,7 +16,7 @@
     <main class="container">
         <header>
             <h1>Register Allocator <span class="badge">Chaitin&ndash;Briggs</span></h1>
-            <p>Parse, build the interference graph, and colour it with K physical registers.</p>
+            <p>Parse, build the interference graph, coalesce, colour, spill &mdash; every stage, inspectable.</p>
         </header>
 
         <div class="layout">
@@ -28,7 +28,11 @@
                             <label for="k-input" class="k-label">K
                                 <input id="k-input" type="number" min="1" max="32" value="4" />
                             </label>
-                            <button id="analyze-btn" class="primary-btn">Parse & Analyze</button>
+                            <label class="k-label" for="coalesce-input">
+                                <input id="coalesce-input" type="checkbox" checked />
+                                Coalesce
+                            </label>
+                            <button id="analyze-btn" class="primary-btn">Parse &amp; Analyze</button>
                         </div>
                     </div>
                     <textarea id="tac-input" spellcheck="false">func main
@@ -40,21 +44,23 @@
   ret t5
 end</textarea>
                 </div>
+                <div class="panel bench-panel">
+                    <div class="panel-header">
+                        <h2>Load a benchmark</h2>
+                    </div>
+                    <div id="bench-buttons" class="bench-buttons"></div>
+                </div>
             </section>
 
             <section class="results-section">
-                <div class="panel summary-panel">
+                <div class="panel tabs-panel">
                     <div class="panel-header">
-                        <h2>Parser Summary</h2>
+                        <h2 id="result-headline">Results</h2>
                     </div>
-                    <pre id="summary-output" class="output-box">Output will appear here...</pre>
-                </div>
-                
-                <div class="panel graph-panel">
-                    <div class="panel-header">
-                        <h2>Interference Graph</h2>
+                    <div id="tab-bar" class="tab-bar"></div>
+                    <div id="tab-content" class="tab-content">
+                        <pre class="output-box">Run "Parse &amp; Analyze" to see results here...</pre>
                     </div>
-                    <div id="graph-output" class="output-box graph-container"></div>
                 </div>
             </section>
         </div>

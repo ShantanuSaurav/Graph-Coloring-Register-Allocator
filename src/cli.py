@@ -5,19 +5,28 @@
 
 Runs the complete pipeline end to end: parse -> build the CFG -> liveness -> build the
 interference graph -> coalesce/colour -> spill and retry if necessary -> print the final
-allocated program. `--dump-cfg`, `--dump-live` and `--dump-graph` show the intermediate
-stages; without them you just get the parsed program and the final result.
+allocated program. `--dump-cfg`, `--dump-live`, `--dump-coalesce` and `--dump-spill`
+show the intermediate stages; `--metrics`/`--metrics-json` print or save the
+structured AllocationMetrics (src.metrics); without any of them you just get the
+parsed program and the final result.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 
 from src.colouring.allocator import AllocationResult
 from src.frontend.parser import ParseError, parse_file
 from src.ir import Function, Instr, is_vreg
-from src.spilling.spiller import MAX_ITERATIONS, count_spill_instructions, run_allocation
+from src.metrics import collect_metrics
+from src.spilling.spiller import (
+    MAX_ITERATIONS,
+    count_spill_instructions,
+    rewrite_with_spills,
+    run_allocation,
+)
 
 
 def _vreg_sort_key(name: str):
@@ -51,6 +60,40 @@ def _register_comment(instr: Instr, result: AllocationResult) -> str:
     return f"    # R{reg}" if reg is not None else ""
 
 
+def _dump_coalesce(result: AllocationResult) -> None:
+    print("coalescing:")
+    if not result.coalesce_trace:
+        print("  (no candidates)" if result.coalesce_stats["candidates"] == 0
+              else "  (disabled — no attempts made)")
+        return
+    for entry in result.coalesce_trace:
+        u, v = entry["pair"]
+        status = "ACCEPTED" if entry["accepted"] else "REFUSED "
+        print(f"  {u} - {v}: {status}  ({entry['reason']})")
+    s = result.coalesce_stats
+    print(f"  total: {s['candidates']} candidate(s), {s['merged']} merged, {s['refused']} refused")
+
+
+def _dump_spill(fn_i: Function, result: AllocationResult) -> None:
+    """Show the before/after of this iteration's spill rewrite, using the real
+    `rewrite_with_spills` (never a hand-written stand-in) so what's printed is
+    exactly what the next iteration would actually run on.
+    """
+    if result.success:
+        print("spilling: none needed (colouring succeeded)")
+        return
+    print(f"spilling: {len(result.spilled)} candidate(s) actually spilled: "
+          f"{sorted(result.spilled, key=_vreg_sort_key)}")
+    print("  BEFORE SPILL:")
+    for block in fn_i.block_order():
+        for instr in block.instrs:
+            print(f"    {instr}")
+    after = rewrite_with_spills(fn_i, result.spilled)
+    print("  AFTER SPILL REWRITE:")
+    for instr in getattr(after, "_parsed_instrs", []):
+        print(f"    {instr}")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="regalloc-a5",
@@ -67,6 +110,14 @@ def main(argv: list[str] | None = None) -> int:
                     help="write the interference graph as Graphviz DOT")
     ap.add_argument("--no-coalesce", action="store_true",
                     help="disable coalescing (for the O3 baseline comparison)")
+    ap.add_argument("--dump-coalesce", action="store_true",
+                    help="print each coalescing candidate and whether it was accepted/refused")
+    ap.add_argument("--dump-spill", action="store_true",
+                    help="print the before/after instruction listing for each spill rewrite")
+    ap.add_argument("--metrics", action="store_true",
+                    help="print structured allocation metrics (src.metrics.AllocationMetrics)")
+    ap.add_argument("--metrics-json", metavar="FILE",
+                    help="write allocation metrics as JSON to FILE")
     args = ap.parse_args(argv)
 
     if args.k < 1:
@@ -96,7 +147,13 @@ def main(argv: list[str] | None = None) -> int:
           f"coalescing {'off' if args.no_coalesce else 'on'}")
 
     # ---- stages 2-6: CFG, liveness, interference, colouring, spilling ----
+    first_iteration: dict[str, object] = {}
+
     def on_iteration(iteration, fn_i, graph, result) -> None:
+        if iteration == 1:
+            first_iteration["graph"] = graph
+            first_iteration["result"] = result
+
         print(f"\n--- iteration {iteration} ---")
         if args.dump_cfg:
             _dump_cfg(fn_i)
@@ -104,6 +161,11 @@ def main(argv: list[str] | None = None) -> int:
             _dump_live(fn_i)
 
         print(f"interference graph: {graph}")
+        if args.dump_coalesce:
+            if args.no_coalesce:
+                print("coalescing: disabled (--no-coalesce)")
+            else:
+                _dump_coalesce(result)
         if result.success:
             print("colouring: success")
             for v in sorted(result.colours, key=_vreg_sort_key):
@@ -116,6 +178,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(f"colouring: {len(result.spilled)} actual spill(s): "
                   f"{sorted(result.spilled, key=_vreg_sort_key)}")
+        if args.dump_spill:
+            _dump_spill(fn_i, result)
 
         if args.dump_graph:
             colours = result.colours if result.success else None
@@ -125,6 +189,23 @@ def main(argv: list[str] | None = None) -> int:
 
     pipeline = run_allocation(fn, args.k, do_coalesce=not args.no_coalesce,
                                on_iteration=on_iteration)
+
+    if args.metrics or args.metrics_json:
+        metrics = collect_metrics(
+            original_fn=fn, k=args.k, do_coalesce=not args.no_coalesce, pipeline=pipeline,
+            first_graph=first_iteration["graph"], first_result=first_iteration["result"],
+            benchmark=args.source,
+        )
+        if args.metrics:
+            print(f"\n{'=' * 60}")
+            print("METRICS")
+            print("=" * 60)
+            for field_name, value in metrics.to_dict().items():
+                print(f"  {field_name:<32} {value}")
+        if args.metrics_json:
+            with open(args.metrics_json, "w", encoding="utf-8") as fh:
+                json.dump(metrics.to_dict(), fh, indent=2)
+            print(f"\n(wrote metrics to {args.metrics_json})")
 
     print(f"\n{'=' * 60}")
     if pipeline.success:

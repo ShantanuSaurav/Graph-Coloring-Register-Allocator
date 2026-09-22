@@ -7,6 +7,7 @@ venv/
 *.dot
 *.png
 !docs/*.png
+results/
 .DS_Store
 .vscode/
 .idea/

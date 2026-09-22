@@ -84,6 +84,15 @@ class AllocationResult:
     spilled: set[str] = field(default_factory=set)          # actual spills
     coalesced: dict[str, str] = field(default_factory=dict)  # merged vreg -> survivor
     k: int = 0
+    # candidates/merged/refused move pairs from this allocation's coalesce() pass —
+    # populated by allocate(); kept as an explicit dict (not new dataclass fields) so
+    # existing positional/keyword construction of AllocationResult elsewhere is unaffected.
+    coalesce_stats: dict[str, int] = field(
+        default_factory=lambda: {"candidates": 0, "merged": 0, "refused": 0}
+    )
+    # Per-pair accepted/refused log from this allocation's coalesce() pass — see
+    # coalesce()'s docstring. Populated by allocate() whenever do_coalesce is True.
+    coalesce_trace: list[dict] = field(default_factory=list)
 
     @property
     def success(self) -> bool:
@@ -211,7 +220,12 @@ def _merge(graph: InterferenceGraph, mapping: dict[str, str], keep: str, drop: s
     mapping[drop] = keep
 
 
-def coalesce(graph: InterferenceGraph, k: int) -> dict[str, str]:
+def coalesce(
+    graph: InterferenceGraph,
+    k: int,
+    stats: dict[str, int] | None = None,
+    trace: list[dict] | None = None,
+) -> dict[str, str]:
     """Merge every copy pair that passes the conservative test. Mutates `graph`.
 
     Returns a map from merged-away vreg to the surviving vreg.
@@ -220,7 +234,22 @@ def coalesce(graph: InterferenceGraph, k: int) -> dict[str, str]:
     pass makes no merge. Each successful merge immediately rewrites `graph.move_pairs`
     so later passes see the up-to-date node names — no separate "resolve the chain"
     step is needed, since a name is only ever merged away once.
+
+    If `stats` is given, it is filled in with the counts behind that mapping:
+    `candidates` (move pairs present before any merge attempt), `merged` (successful
+    merges — `len(mapping)`), and `refused` (candidates that never became a merge,
+    whether Briggs' test rejected them outright or one side was consumed by a
+    different pair first).
+
+    If `trace` is given (a list), one dict is appended per pair *actually evaluated*
+    (`{"pair": (u, v), "accepted": bool, "reason": str}`), in the order the loop
+    evaluates them — this is a live log of what happened, for the CLI/demo's
+    "candidate / accepted-or-refused / reason" debug view, not a reconstruction. A
+    pair can appear more than once if an earlier pass refused it and a later merge
+    elsewhere changed the picture (e.g. lowered a neighbour's degree), and the names
+    shown already reflect any merge from an earlier pass in the same call.
     """
+    candidates = len(graph.move_pairs)
     mapping: dict[str, str] = {}
     progress = True
     while progress:
@@ -235,6 +264,19 @@ def coalesce(graph: InterferenceGraph, k: int) -> dict[str, str]:
                 keep, drop = sorted((u, v))
                 _merge(graph, mapping, keep, drop)
                 progress = True
+                if trace is not None:
+                    trace.append({"pair": (u, v), "accepted": True,
+                                  "reason": "safe: merged node stays under k significant-degree neighbours"})
+            elif trace is not None:
+                if graph.interferes(u, v):
+                    reason = "refused: u and v interfere"
+                else:
+                    reason = f"refused: merged node would have >= {k} significant-degree (>=k) neighbours"
+                trace.append({"pair": (u, v), "accepted": False, "reason": reason})
+    if stats is not None:
+        stats["candidates"] = candidates
+        stats["merged"] = len(mapping)
+        stats["refused"] = candidates - len(mapping)
     return mapping
 
 
@@ -252,10 +294,27 @@ def allocate(
        the copy we hold here is still intact afterwards — exactly what `select` needs
        to look up true neighbour sets.
     4. Select: colour or actually-spill every surviving node.
+
+    The returned result's `coalesce_stats`/`coalesce_trace` fields are always filled
+    in (from this call's own coalesce() pass, or left at their zero/empty defaults
+    when `do_coalesce` is False) — see AllocationResult and coalesce()'s docstrings.
+    Used by the CLI's `--dump-coalesce`, the web API and the faculty demo.
     """
     working = graph.copy()
-    merged = coalesce(working, k) if do_coalesce else {}
+    if do_coalesce:
+        coalesce_stats: dict[str, int] = {"candidates": 0, "merged": 0, "refused": 0}
+        coalesce_trace: list[dict] = []
+        merged = coalesce(working, k, stats=coalesce_stats, trace=coalesce_trace)
+    else:
+        # Coalescing was never attempted, so nothing was "refused" — but the move
+        # pairs that *could* have been tried are still real information (used by the
+        # coalescing on/off experiment), so report them as candidates with 0 merges.
+        merged = {}
+        coalesce_stats = {"candidates": len(working.move_pairs), "merged": 0, "refused": 0}
+        coalesce_trace = []
     stack, _optimistic = simplify(working, k, cost_fn=cost_fn)
     result = select(working, stack, k)
     result.coalesced = merged
+    result.coalesce_stats = coalesce_stats
+    result.coalesce_trace = coalesce_trace
     return result

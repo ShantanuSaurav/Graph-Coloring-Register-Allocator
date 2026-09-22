@@ -1,3 +1,6 @@
 pytest>=8.0
 fastapi
 pydantic
+httpx
+matplotlib
+uvicorn
