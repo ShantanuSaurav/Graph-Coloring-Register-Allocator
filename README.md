@@ -303,6 +303,9 @@ shows a checkmark when `AllocationResult.verify()` actually passed. See
 
 ## Web demo
 
+You can try the full pipeline directly in your browser:
+**🚀 Live Web App:** [https://graph-coloring-register-allocator.vercel.app/](https://graph-coloring-register-allocator.vercel.app/)
+
 `api/index.py` is a FastAPI app (also the Vercel serverless entry point via
 `vercel.json`) that runs the same real pipeline and returns, in one response: the
 parsed TAC, every iteration's CFG/liveness/interference/coalescing/spilling detail,
