@@ -271,6 +271,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ code, k, coalescing }),
             });
+
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`API returned HTTP ${response.status}: ${text.slice(0, 300)}`);
+            }
+
             const data = await response.json();
 
             if (data.error) {
@@ -278,6 +284,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('pane-summary').innerHTML = `<pre class="output-box" style="color:#e15759">${esc(data.error)}</pre>`;
                 selectTab('summary');
                 headline.textContent = 'Error';
+            } else if (!data.stages || !data.metrics || !data.verification) {
+                // Defensive: an API response that isn't an error but also doesn't have
+                // the shape this dashboard expects (e.g. a stale/mismatched deployment)
+                // should say so clearly rather than throwing deep inside a renderer.
+                throw new Error('API response is missing expected fields (stages/metrics/verification). '
+                    + 'The deployed backend may be out of date.');
             } else {
                 renderAll(data);
             }
