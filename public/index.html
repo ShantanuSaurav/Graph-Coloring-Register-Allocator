@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f6f7fb" />
+  <title>Register Lab — Compiler Workbench</title>
+  <meta name="description" content="Explore Chaitin–Briggs graph-coloring register allocation, control-flow and interference graphs, spill behavior and measured complexity." />
+  <link rel="stylesheet" href="/style.css" />
+  <script defer src="/script.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="/" aria-label="Register Lab home"><span class="brand-icon">R<span>·</span></span><span>REGISTER<span class="brand-secondary">LAB</span><small>COMPILER WORKBENCH</small></span></a>
+      <div class="nav-caption">WORKSPACE</div>
+      <nav aria-label="Main navigation">
+        <button class="nav-link active" data-view="explorer"><span class="nav-icon">⌘</span> Allocation explorer</button>
+        <button class="nav-link" data-view="complexity"><span class="nav-icon">↗</span> Complexity lab</button>
+        <button class="nav-link" data-view="banks"><span class="nav-icon">▦</span> Register banks</button>
+      </nav>
+      <div class="nav-caption secondary-caption">PIPELINE REFERENCE</div>
+      <div class="pipeline-map"><span>01</span> Parse TAC <span>→</span><span>02</span> Build CFG <span>→</span><span>03</span> Liveness <span>→</span><span>04</span> Interference <span>→</span><span>05</span> Coalesce & color <span>→</span><span>06</span> Spill / retry</div>
+      <div class="sidebar-footer"><span class="status-dot"></span> Local algorithm engine <small>Chaitin–Briggs · Educational</small></div>
+    </aside>
+    <main class="main">
+      <header class="topbar"><div class="breadcrumb">Compiler lab <span>/</span> <b id="page-crumb">Allocation explorer</b></div><a class="repo-link" href="https://github.com/ShantanuSaurav/Graph-Coloring-Register-Allocator" target="_blank" rel="noopener">GitHub ↗</a></header>
+      <section class="heading"><div class="eyebrow">INTERACTIVE COMPILER ANALYSIS</div><h1 id="page-title">Allocation explorer</h1><p id="page-description">Track each transformation from three-address code to physical registers.</p></section>
+      <div class="workspace" id="workbench">
+        <section class="editor-panel panel"><div class="section-top"><div><h2>Source program</h2><p>Three-address code · one function</p></div><span class="file-pill">main.tac</span></div>
+          <div class="source-controls"><label for="k-input">Registers <strong>K</strong></label><input id="k-input" type="number" min="1" max="32" value="4" /><label class="toggle"><input type="checkbox" id="coalesce-input" checked /> Enable coalescing</label></div>
+          <div class="editor-frame"><div class="editor-bar"><span class="editor-dot"></span> TAC EDITOR <span class="editor-right">EDITABLE</span></div><textarea id="tac-input" aria-label="Three-address code" spellcheck="false">func main
+  t1 = 1
+  t2 = 2
+  t3 = t1 + t2
+  t4 = t3
+  t5 = t4 * 2
+  ret t5
+end</textarea></div>
+          <div class="examples"><div class="field-label">LOAD EXAMPLE</div><div class="bench-list" id="bench-buttons"></div></div>
+          <div class="editor-actions"><button id="analyze-btn" class="primary">Run allocation <span>→</span></button><span id="request-status" role="status">Ready to analyze</span></div>
+        </section>
+        <section class="results-panel panel"><div class="section-top"><div><h2>Analysis output</h2><p>Inspect the algorithm at each stage</p></div><div id="result-badge" class="result-badge">NOT RUN</div></div>
+          <div class="metric-strip" id="metrics-strip"><div><span>Virtual registers</span><strong>—</strong></div><div><span>Physical registers</span><strong>4</strong></div><div><span>Spill operations</span><strong>—</strong></div><div><span>Iterations</span><strong>—</strong></div></div>
+          <div class="stage-header"><div class="stage-tabs" id="stage-tabs" role="tablist" aria-label="Analysis stage"><button class="stage-tab active" data-stage="graph">Interference</button><button class="stage-tab" data-stage="cfg">Control flow</button><button class="stage-tab" data-stage="live">Liveness</button><button class="stage-tab" data-stage="color">Coloring</button><button class="stage-tab" data-stage="spill">Spills</button><button class="stage-tab" data-stage="output">Output</button></div><label class="iteration-control">Iteration <select id="iteration-select" disabled><option>—</option></select></label></div>
+          <div class="canvas-region" id="stage-content"><div class="empty-state"><div class="empty-icon">◇</div><h3>Ready for analysis</h3><p>Run the allocator to see live graphs, assignments and intermediate stages.</p></div></div>
+          <div class="result-footer"><span id="result-note">Results are computed by the Python compiler.</span><button class="quiet" id="export-json" disabled>Export JSON ↓</button></div>
+        </section>
+      </div>
+      <section class="special-view" id="complexity-view" hidden><div class="panel intro-panel"><h2>Allocation cost study</h2><p>Run the same program with different register budgets. Charts show median measured Python wall-time and peak traced memory. These are empirical measurements, not a proof of Big-O complexity.</p><div class="experiment-toolbar"><label>Register counts <input id="experiment-k" value="2,3,4,6,8" aria-label="Register counts comma separated" /></label><label>Repeats <select id="experiment-repeats"><option>1</option><option selected>3</option><option>5</option></select></label><button class="primary" id="experiment-run">Run experiment →</button></div><div id="experiment-status" role="status"></div></div><div class="chart-grid"><div class="panel chart-panel"><h3>Allocator runtime <small>milliseconds · lower is better</small></h3><div id="time-chart" class="chart-area"></div></div><div class="panel chart-panel"><h3>Peak Python allocations <small>KiB · lower is better</small></h3><div id="memory-chart" class="chart-area"></div></div></div><div class="panel table-panel"><h3>Experimental results</h3><div id="experiment-table" class="data-scroll"><p class="muted">No experiment has been run yet.</p></div><button id="experiment-export" class="quiet" disabled>Download CSV ↓</button></div><div class="theory-note"><strong>Complexity interpretation</strong><p>For a graph with V virtual registers and E interference edges, adjacency-list graph storage is O(V + E). Building interference and heuristic coloring costs depend on implementation, graph density, CFG size, and spill retries; graph coloring in general is NP-complete. These measurements characterize this implementation, not an asymptotic bound.</p></div></section>
+      <section class="special-view" id="banks-view" hidden><div class="panel intro-panel"><h2>Register group visualization</h2><p>Organize the available physical registers into boxes. Each assignment is shown inside the group containing its physical register. This is a visualization of register partitions, not hardware memory segmentation or an independent bank-constrained allocation algorithm.</p><div class="experiment-toolbar"><label>Registers per group <select id="bank-size"><option>2</option><option selected>4</option><option>8</option></select></label><button class="primary" id="banks-refresh">Refresh assignment →</button></div></div><div id="bank-groups" class="banks-grid"></div></section>
+      <footer class="footer">REGISTER LAB · Educational Chaitin–Briggs allocator · Source and methodology on GitHub</footer>
+    </main>
+  </div>
+</body>
+</html>
