@@ -1,6 +1,10 @@
 # Register Lab — Graph-Coloring Register Allocator
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Vercel-blue?style=flat-square&logo=vercel)](https://graph-coloring-register-allocator-ipw62459k.vercel.app/)
+
 An interactive **Chaitin–Briggs register-allocation compiler workbench** for custom three-address code (TAC). Parse, build a control-flow graph, calculate liveness, construct the interference graph, coalesce safe moves, color virtual registers, and rewrite spills.
+
+> 🚀 **Live Demo:** [https://graph-coloring-register-allocator-ipw62459k.vercel.app/](https://graph-coloring-register-allocator-ipw62459k.vercel.app/)
 
 ## Features
 
@@ -51,9 +55,11 @@ tests/           Python regression suite
 docs/            Architecture and academic notes
 ```
 
-## Deploy
+## Deploy & Live Demo
 
-The repository includes `vercel.json` for Vercel's Python API and static assets. Import the GitHub repository into Vercel, configure Python support, and confirm the rewrite rules and API routes. No Vercel project is currently provisioned by this archive.
+- **Live Application:** [https://graph-coloring-register-allocator-ipw62459k.vercel.app/](https://graph-coloring-register-allocator-ipw62459k.vercel.app/)
+
+The repository includes `vercel.json` for Vercel's Python API and static assets. Import the GitHub repository into Vercel, configure Python support, and confirm the rewrite rules and API routes.
 
 ## Testing and project scope
 
