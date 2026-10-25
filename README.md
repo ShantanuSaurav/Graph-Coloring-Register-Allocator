@@ -2,6 +2,10 @@
 
 **A graph-coloring register allocator and interactive Compiler Design workbench**
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Vercel-blue?style=flat-square&logo=vercel)](https://graph-coloring-register-allocator.vercel.app/)
+
+> 🌐 **Live Demo:** [https://graph-coloring-register-allocator.vercel.app/](https://graph-coloring-register-allocator.vercel.app/)
+
 Register Lab is an educational implementation of Chaitin–Briggs graph-coloring register allocation for one function written in three-address code (TAC). It builds a control-flow graph (CFG), solves liveness data flow, creates an interference graph, coalesces safe moves, assigns physical registers, and inserts stack spills when required.
 
 The project contains a **working Python compiler core**, **FastAPI endpoints**, and a **self-contained website**. Graphs are drawn as native browser SVG—no Graphviz server, CDN, D3, or remote JavaScript is required.
@@ -120,7 +124,7 @@ Public demo endpoints have size limits to bound compute work. Program code must 
 4. Verify the landing page, `POST /api/analyze`, `POST /api/experiment`, `POST /api/scale-study`, and `/examples/simple.tac` on the deployment domain.
 5. Run the **Simple**, **Diamond**, **High pressure** and **Copy heavy** examples in the deployed browser. If a route fails, inspect your deployment's serverless function logs before changing routing.
 
-**No deployment URL is hard-coded** because each newly imported Vercel project receives its own address. Local tests do not establish that a separate production deployment is working.
+**Live deployment:** [https://graph-coloring-register-allocator.vercel.app/](https://graph-coloring-register-allocator.vercel.app/)
 
 ## Tests and reproducibility
 
