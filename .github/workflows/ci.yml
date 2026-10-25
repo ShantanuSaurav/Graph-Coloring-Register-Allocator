@@ -16,3 +16,5 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install -r requirements.txt pytest-cov
       - run: python -m pytest --cov=src --cov=api --cov-report=term-missing
+      - run: python scripts/verify_project.py
+      - run: node --check public/script.js

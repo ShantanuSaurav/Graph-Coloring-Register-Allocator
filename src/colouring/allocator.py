@@ -93,6 +93,9 @@ class AllocationResult:
     # Per-pair accepted/refused log from this allocation's coalesce() pass — see
     # coalesce()'s docstring. Populated by allocate() whenever do_coalesce is True.
     coalesce_trace: list[dict] = field(default_factory=list)
+    simplify_stack: list[str] = field(default_factory=list)
+    optimistic_nodes: list[str] = field(default_factory=list)
+    colouring_method: str = "simplify_select"
 
     @property
     def success(self) -> bool:
@@ -280,6 +283,52 @@ def coalesce(
     return mapping
 
 
+def exact_colour_bounded(
+    graph: InterferenceGraph, k: int, *, max_nodes: int = 18,
+    search_budget: int = 50_000,
+) -> dict[str, int] | None:
+    """Try an exact k-colouring using bounded DSATUR backtracking.
+
+    This is a *fallback* for small hard graphs, not a replacement for Briggs.
+    None means either proven uncolourable OR the safety budget was exhausted.
+    The search explores at most ``search_budget`` assignments; large graphs are
+    deliberately skipped to protect API latency.
+    """
+    nodes = sorted(graph.nodes())
+    if k < 1 or len(nodes) > max_nodes or search_budget < 1:
+        return None
+    assigned: dict[str, int] = {}
+    neighbours = {v: graph.neighbours(v) for v in nodes}
+    attempts = 0
+
+    def search() -> bool:
+        nonlocal attempts
+        if len(assigned) == len(nodes):
+            return True
+        if attempts >= search_budget:
+            return False
+        remaining = [v for v in nodes if v not in assigned]
+        # DSATUR: highest saturation, then degree, then lexical order.
+        def priority(v: str) -> tuple[int, int]:
+            return (len({assigned[n] for n in neighbours[v] if n in assigned}),
+                    len(neighbours[v]))
+        v = sorted(remaining, key=lambda n: (-priority(n)[0], -priority(n)[1], n))[0]
+        occupied = {assigned[n] for n in neighbours[v] if n in assigned}
+        for colour in range(k):
+            if colour in occupied:
+                continue
+            attempts += 1
+            assigned[v] = colour
+            if search():
+                return True
+            del assigned[v]
+            if attempts >= search_budget:
+                return False
+        return False
+
+    return dict(assigned) if search() else None
+
+
 def allocate(
     graph: InterferenceGraph,
     k: int,
@@ -314,6 +363,16 @@ def allocate(
         coalesce_trace = []
     stack, _optimistic = simplify(working, k, cost_fn=cost_fn)
     result = select(working, stack, k)
+    result.simplify_stack = stack
+    result.optimistic_nodes = sorted(_optimistic)
+    # A heuristic spill does not prove that k-colouring is impossible. Before
+    # adding memory traffic, try bounded exact colouring on small hard graphs.
+    if result.spilled:
+        exact = exact_colour_bounded(working, k)
+        if exact is not None:
+            result.colours = exact
+            result.spilled.clear()
+            result.colouring_method = "bounded_exact_fallback"
     result.coalesced = merged
     result.coalesce_stats = coalesce_stats
     result.coalesce_trace = coalesce_trace

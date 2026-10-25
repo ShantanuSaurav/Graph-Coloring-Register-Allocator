@@ -56,7 +56,11 @@ def test_real_register_pressure_forces_a_spill_at_low_k():
     """
     fn = parse(BENCH.read_text())
     result = run_allocation(fn, k=3, do_coalesce=True)
-    assert not result.success  # K=3 is not enough for the 8-value copy cluster
+    # Greedy colouring sees actual pressure, but the final conservative
+    # spill-every-live-range fallback can still produce a correct allocation.
+    assert result.success
+    assert result.stop_reason == "conservative_spill_fallback"
+    assert result.allocation.verify(result.graph) == []
 
 
 def test_coalescing_produces_safe_merges_on_this_benchmark():

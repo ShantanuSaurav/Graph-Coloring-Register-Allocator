@@ -1,3 +1,5 @@
+> **Historical development notes:** This document describes an earlier phase. For the latest behavior, including conservative spill fallback and complexity-by-input-size experiments, see [README.md](README.md) and [docs/FINAL_RELEASE.md](docs/FINAL_RELEASE.md).
+
 # Improvements — phase 1
 
 This project was revised to address correctness and API reliability issues while preserving the existing frontend JSON contract.

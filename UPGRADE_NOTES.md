@@ -1,3 +1,5 @@
+> **Historical development notes:** This document describes an earlier phase. For the latest behavior, including conservative spill fallback and complexity-by-input-size experiments, see [README.md](README.md) and [docs/FINAL_RELEASE.md](docs/FINAL_RELEASE.md).
+
 # Improvements and verification (October 2026)
 
 This repository incorporates the original project and the Phase 1 fixes.

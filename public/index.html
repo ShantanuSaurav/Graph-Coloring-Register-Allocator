@@ -1,35 +1,43 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#f6f7fb" />
-  <title>Register Lab — Compiler Workbench</title>
-  <meta name="description" content="Explore Chaitin–Briggs graph-coloring register allocation, control-flow and interference graphs, spill behavior and measured complexity." />
-  <link rel="stylesheet" href="/style.css" />
-  <script defer src="/script.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f5f1">
+  <meta name="description" content="Learn graph-colouring register allocation through an interactive TAC compiler, graphs, liveness tables, spill rewrites and measured complexity experiments.">
+  <title>Register Lab | Graph-Coloring Compiler Workbench</title>
+  <link href="/style.css" rel="stylesheet">
+  <script src="/script.js" defer></script>
 </head>
 <body>
-  <div class="shell">
-    <aside class="sidebar">
-      <a class="brand" href="/" aria-label="Register Lab home"><span class="brand-icon">R<span>·</span></span><span>REGISTER<span class="brand-secondary">LAB</span><small>COMPILER WORKBENCH</small></span></a>
-      <div class="nav-caption">WORKSPACE</div>
-      <nav aria-label="Main navigation">
-        <button class="nav-link active" data-view="explorer"><span class="nav-icon">⌘</span> Allocation explorer</button>
-        <button class="nav-link" data-view="complexity"><span class="nav-icon">↗</span> Complexity lab</button>
-        <button class="nav-link" data-view="banks"><span class="nav-icon">▦</span> Register banks</button>
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <div class="identity"><div class="identity-mark" aria-hidden="true">R<span>•</span></div><div><strong>Register Lab</strong><small>COMPILER DESIGN WORKBENCH</small></div></div>
+      <p class="side-label">LAB WORKSPACES</p>
+      <nav class="main-nav" aria-label="Workspaces">
+        <button class="nav-item active" type="button" data-view="explorer" aria-current="page"><span>01</span>Allocation explorer</button>
+        <button class="nav-item" type="button" data-view="complexity"><span>02</span>Complexity analysis</button>
+        <button class="nav-item" type="button" data-view="banks"><span>03</span>Register banks</button>
+        <button class="nav-item" type="button" data-view="guide"><span>04</span>Learning guide</button>
       </nav>
-      <div class="nav-caption secondary-caption">PIPELINE REFERENCE</div>
-      <div class="pipeline-map"><span>01</span> Parse TAC <span>→</span><span>02</span> Build CFG <span>→</span><span>03</span> Liveness <span>→</span><span>04</span> Interference <span>→</span><span>05</span> Coalesce & color <span>→</span><span>06</span> Spill / retry</div>
-      <div class="sidebar-footer"><span class="status-dot"></span> Local algorithm engine <small>Chaitin–Briggs · Educational</small></div>
+      <div class="sidebar-reference">
+        <p class="side-label">THE ALLOCATION PIPELINE</p>
+        <ol><li>Parse source TAC</li><li>Construct control-flow graph</li><li>Calculate liveness</li><li>Build interference graph</li><li>Coalesce copies, color nodes</li><li>Rewrite spills, retry</li></ol>
+      </div>
+      <div class="side-footer"><div class="service-state"><i aria-hidden="true"></i> Python allocation engine</div><small>Educational model · Chaitin–Briggs<br>No machine-code generation</small></div>
     </aside>
-    <main class="main">
-      <header class="topbar"><div class="breadcrumb">Compiler lab <span>/</span> <b id="page-crumb">Allocation explorer</b></div><a class="repo-link" href="https://github.com/ShantanuSaurav/Graph-Coloring-Register-Allocator" target="_blank" rel="noopener">GitHub ↗</a></header>
-      <section class="heading"><div class="eyebrow">INTERACTIVE COMPILER ANALYSIS</div><h1 id="page-title">Allocation explorer</h1><p id="page-description">Track each transformation from three-address code to physical registers.</p></section>
-      <div class="workspace" id="workbench">
-        <section class="editor-panel panel"><div class="section-top"><div><h2>Source program</h2><p>Three-address code · one function</p></div><span class="file-pill">main.tac</span></div>
-          <div class="source-controls"><label for="k-input">Registers <strong>K</strong></label><input id="k-input" type="number" min="1" max="32" value="4" /><label class="toggle"><input type="checkbox" id="coalesce-input" checked /> Enable coalescing</label></div>
-          <div class="editor-frame"><div class="editor-bar"><span class="editor-dot"></span> TAC EDITOR <span class="editor-right">EDITABLE</span></div><textarea id="tac-input" aria-label="Three-address code" spellcheck="false">func main
+    <div class="app-main" id="main">
+      <header class="topbar"><button class="mobile-menu" id="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">☰</button><div class="topbar-path">Compiler Design <span>/</span> <b id="breadcrumb">Allocation explorer</b></div><div class="top-actions"><span class="edition">BCSE307 · COMPILER DESIGN</span><a href="https://github.com/ShantanuSaurav/Graph-Coloring-Register-Allocator" target="_blank" rel="noopener noreferrer">GitHub repository ↗</a></div></header>
+      <main class="main-content">
+        <section class="page-heading"><div class="overline">GRAPH-COLORING REGISTER ALLOCATION</div><h1 id="page-title">Allocation explorer</h1><p id="page-description">Trace how virtual registers become physical registers, one compiler stage at a time.</p></section>
+        <section id="explorer-view" class="view">
+          <div class="tip-strip"><span class="tip-icon">i</span><div><strong>New to register allocation?</strong> Enter three-address code, choose the number of physical registers <b>K</b>, and select <b>Run analysis</b>. Start with the Simple example, then try High pressure. <button type="button" class="text-action" id="help-open">How it works →</button></div></div>
+          <div class="workspace-grid">
+            <section class="panel source-panel" aria-labelledby="source-title">
+              <div class="panel-header"><div><h2 id="source-title">Source program</h2><p>Editable three-address code (TAC)</p></div><span class="subtle-tag">main.tac</span></div>
+              <div class="field-row"><label class="field" for="k-input">Physical registers (K)<input id="k-input" type="number" min="1" max="32" value="4" inputmode="numeric"></label><label class="check-field" for="coalesce-input"><input id="coalesce-input" type="checkbox" checked> Enable Briggs coalescing</label></div>
+              <div class="editor-wrap"><div class="editor-top"><span><i class="editor-led"></i> TAC SOURCE</span><span>Plain-text editor</span></div><textarea id="tac-input" spellcheck="false" aria-label="Edit three-address code">func main
   t1 = 1
   t2 = 2
   t3 = t1 + t2
@@ -37,20 +45,49 @@
   t5 = t4 * 2
   ret t5
 end</textarea></div>
-          <div class="examples"><div class="field-label">LOAD EXAMPLE</div><div class="bench-list" id="bench-buttons"></div></div>
-          <div class="editor-actions"><button id="analyze-btn" class="primary">Run allocation <span>→</span></button><span id="request-status" role="status">Ready to analyze</span></div>
+              <div class="examples-header"><h3>Example programs</h3><span>Choose one to load it into the editor</span></div><div class="example-list" id="bench-buttons"></div>
+              <div class="editor-actions"><button class="primary-button" type="button" id="analyze-btn">Run analysis <span>→</span></button><button class="secondary-button" type="button" id="reset-btn">Reset</button></div>
+              <p id="request-status" class="inline-status" role="status" aria-live="polite">Ready. Use Run analysis to begin.</p>
+            </section>
+            <section class="panel output-panel" aria-labelledby="results-title">
+              <div class="panel-header result-header"><div><h2 id="results-title">Compiler results</h2><p>Stages are calculated by the Python engine, not simulated in the browser.</p></div><span class="status-badge neutral" id="result-badge">NOT RUN</span></div>
+              <div class="metrics-strip" id="metrics-strip" aria-label="Allocation statistics"><div><small>Virtual registers</small><b>—</b></div><div><small>Physical registers</small><b>4</b></div><div><small>Spill operations</small><b>—</b></div><div><small>Iterations</small><b>—</b></div></div>
+              <div class="round-toolbar"><div><span class="toolbar-label">Choose an allocation step</span><div class="tab-wrap" role="tablist" aria-label="Compiler stages" id="stage-tabs"><button class="stage-tab active" type="button" data-stage="graph" role="tab" aria-selected="true">Interference</button><button class="stage-tab" type="button" data-stage="cfg" role="tab" aria-selected="false">Control flow</button><button class="stage-tab" type="button" data-stage="live" role="tab" aria-selected="false">Liveness</button><button class="stage-tab" type="button" data-stage="color" role="tab" aria-selected="false">Coloring</button><button class="stage-tab" type="button" data-stage="spill" role="tab" aria-selected="false">Spilling</button><button class="stage-tab" type="button" data-stage="output" role="tab" aria-selected="false">Final output</button></div></div><label class="round-field" for="iteration-select">Iteration<select id="iteration-select" disabled><option value="0">—</option></select></label></div>
+              <div class="stage-help" id="stage-help">An edge means two virtual registers must not use the same physical register.</div>
+              <div class="stage-content" id="stage-content" role="tabpanel" aria-live="polite"><div class="empty-state"><div class="empty-mark">{ }</div><h3>No analysis yet</h3><p>Load an example and select <b>Run analysis</b>. Your graphs and data tables will appear here.</p></div></div>
+              <div class="results-footer"><span id="result-note">Nothing has been calculated yet.</span><button type="button" class="secondary-button compact" id="export-json" disabled>Export JSON ↓</button></div>
+            </section>
+          </div>
         </section>
-        <section class="results-panel panel"><div class="section-top"><div><h2>Analysis output</h2><p>Inspect the algorithm at each stage</p></div><div id="result-badge" class="result-badge">NOT RUN</div></div>
-          <div class="metric-strip" id="metrics-strip"><div><span>Virtual registers</span><strong>—</strong></div><div><span>Physical registers</span><strong>4</strong></div><div><span>Spill operations</span><strong>—</strong></div><div><span>Iterations</span><strong>—</strong></div></div>
-          <div class="stage-header"><div class="stage-tabs" id="stage-tabs" role="tablist" aria-label="Analysis stage"><button class="stage-tab active" data-stage="graph">Interference</button><button class="stage-tab" data-stage="cfg">Control flow</button><button class="stage-tab" data-stage="live">Liveness</button><button class="stage-tab" data-stage="color">Coloring</button><button class="stage-tab" data-stage="spill">Spills</button><button class="stage-tab" data-stage="output">Output</button></div><label class="iteration-control">Iteration <select id="iteration-select" disabled><option>—</option></select></label></div>
-          <div class="canvas-region" id="stage-content"><div class="empty-state"><div class="empty-icon">◇</div><h3>Ready for analysis</h3><p>Run the allocator to see live graphs, assignments and intermediate stages.</p></div></div>
-          <div class="result-footer"><span id="result-note">Results are computed by the Python compiler.</span><button class="quiet" id="export-json" disabled>Export JSON ↓</button></div>
+        <section class="view" id="complexity-view" hidden>
+          <div class="tip-strip"><span class="tip-icon">i</span><div><strong>Understand the difference:</strong> Measured <em>runtime</em> is Python allocator wall-clock time; measured <em>space</em> is peak tracked Python memory. Neither measures the execution time of generated machine code or proves a Big-O bound.</div></div>
+          <div class="panel study-form"><div class="panel-header"><div><h2>Experiment A · Register budget</h2><p>Hold the TAC source constant and vary K.</p></div></div><div class="form-line"><label class="field" for="experiment-k">Register values (comma-separated)<input id="experiment-k" value="2,3,4,6,8"></label><label class="field small-field" for="experiment-repeats">Trials<select id="experiment-repeats"><option>1</option><option selected>3</option><option>5</option></select></label><button id="experiment-run" class="primary-button">Measure allocation →</button></div><p id="experiment-status" class="inline-status" role="status">Use the source code from the Allocation explorer.</p></div>
+          <div class="chart-grid"><section class="panel chart-panel"><h3>Allocation time <small>Median wall-time · milliseconds</small></h3><div id="time-chart" class="chart-area"></div></section><section class="panel chart-panel"><h3>Allocation memory <small>Median peak Python allocations · KiB</small></h3><div id="memory-chart" class="chart-area"></div></section></div>
+          <section class="panel data-panel"><div class="panel-header"><div><h2>Register-budget results</h2><p>All measurements taken on the server running your program.</p></div><button id="experiment-export" class="secondary-button compact" disabled>Export CSV ↓</button></div><div class="table-scroll" id="experiment-table"><p class="muted">No measurements available yet.</p></div></section>
+          <div class="panel study-form"><div class="panel-header"><div><h2>Experiment B · Input size</h2><p>Compare input size against time and memory using a deterministic chain of TAC operations.</p></div></div><div class="form-line"><label class="field" for="scale-k">Physical registers (K)<input id="scale-k" type="number" min="2" max="16" value="4"></label><label class="field" for="scale-sizes">Instructions (comma-separated)<input id="scale-sizes" value="16,32,64,96,128"></label><button class="primary-button" type="button" id="scale-run">Measure scaling →</button></div><p id="scale-status" class="inline-status" role="status">Synthetic input grows while the compiler and K stay constant.</p></div>
+          <div class="chart-grid"><section class="panel chart-panel"><h3>Time vs. input size <small>Measured milliseconds</small></h3><div id="scale-time-chart" class="chart-area"></div></section><section class="panel chart-panel"><h3>Space vs. input size <small>Measured peak KiB</small></h3><div id="scale-memory-chart" class="chart-area"></div></section></div>
+          <section class="panel theory-panel"><h2>Theoretical context</h2><p>A graph stored as adjacency lists needs <b>O(V + E)</b> space for V variables and E interference edges. The full allocation pipeline also stores TAC instructions, CFG information, and live sets. Coloring the graph optimally is NP-complete; the Chaitin–Briggs heuristic usually avoids exhaustive search. The bounded exact fallback used for small hard graphs can have exponential worst-case behavior.</p><p>For an empirical complexity argument, compare the two input-size charts, repeat measurements, and report the test environment. Operating system scheduling and Python allocation overhead create natural variation.</p></section>
         </section>
-      </div>
-      <section class="special-view" id="complexity-view" hidden><div class="panel intro-panel"><h2>Allocation cost study</h2><p>Run the same program with different register budgets. Charts show median measured Python wall-time and peak traced memory. These are empirical measurements, not a proof of Big-O complexity.</p><div class="experiment-toolbar"><label>Register counts <input id="experiment-k" value="2,3,4,6,8" aria-label="Register counts comma separated" /></label><label>Repeats <select id="experiment-repeats"><option>1</option><option selected>3</option><option>5</option></select></label><button class="primary" id="experiment-run">Run experiment →</button></div><div id="experiment-status" role="status"></div></div><div class="chart-grid"><div class="panel chart-panel"><h3>Allocator runtime <small>milliseconds · lower is better</small></h3><div id="time-chart" class="chart-area"></div></div><div class="panel chart-panel"><h3>Peak Python allocations <small>KiB · lower is better</small></h3><div id="memory-chart" class="chart-area"></div></div></div><div class="panel table-panel"><h3>Experimental results</h3><div id="experiment-table" class="data-scroll"><p class="muted">No experiment has been run yet.</p></div><button id="experiment-export" class="quiet" disabled>Download CSV ↓</button></div><div class="theory-note"><strong>Complexity interpretation</strong><p>For a graph with V virtual registers and E interference edges, adjacency-list graph storage is O(V + E). Building interference and heuristic coloring costs depend on implementation, graph density, CFG size, and spill retries; graph coloring in general is NP-complete. These measurements characterize this implementation, not an asymptotic bound.</p></div></section>
-      <section class="special-view" id="banks-view" hidden><div class="panel intro-panel"><h2>Register group visualization</h2><p>Organize the available physical registers into boxes. Each assignment is shown inside the group containing its physical register. This is a visualization of register partitions, not hardware memory segmentation or an independent bank-constrained allocation algorithm.</p><div class="experiment-toolbar"><label>Registers per group <select id="bank-size"><option>2</option><option selected>4</option><option>8</option></select></label><button class="primary" id="banks-refresh">Refresh assignment →</button></div></div><div id="bank-groups" class="banks-grid"></div></section>
-      <footer class="footer">REGISTER LAB · Educational Chaitin–Briggs allocator · Source and methodology on GitHub</footer>
-    </main>
+        <section class="view" id="banks-view" hidden><div class="tip-strip"><span class="tip-icon">i</span><div><strong>Register groups, not memory segments.</strong> This visual grouping shows which virtual registers share each physical register. It does not simulate hardware segmentation or a register-bank-constrained instruction set.</div></div><section class="panel study-form"><div class="panel-header"><div><h2>Physical register groups</h2><p>Each box contains a configurable range of physical registers (R0 ... R(K−1)).</p></div></div><div class="form-line"><label class="field" for="bank-size">Registers per group<select id="bank-size"><option value="2">2</option><option value="4" selected>4</option><option value="8">8</option></select></label><button class="secondary-button" id="banks-refresh">Refresh groups</button></div><div id="bank-groups" class="banks-grid"></div></section></section>
+        <section class="view guide-view" id="guide-view" hidden>
+          <div class="panel guide-panel"><h2>Start here: a four-step walkthrough</h2><ol class="guide-steps"><li><b>Load TAC.</b> Select <em>Simple</em> or paste your own program into the source editor.</li><li><b>Set K.</b> K is the maximum number of physical registers available, numbered R0 through R(K−1).</li><li><b>Run analysis.</b> The backend builds a CFG, computes liveness, constructs an interference graph and assigns colors. Under pressure, it inserts spill loads/stores and retries.</li><li><b>Compare.</b> Change K, switch between iterations and use the Complexity lab to collect experimental measurements.</li></ol><button class="primary-button" id="guide-start">Open allocation explorer →</button></div>
+          <div class="guide-cards"><article class="panel guide-card"><span>01 · CONTROL FLOW</span><h3>What is a basic block?</h3><p>A basic block is a sequence of instructions with a single entry and exit. The CFG shows which block can execute next, including branches and loops.</p></article><article class="panel guide-card"><span>02 · DATA FLOW</span><h3>Why is liveness important?</h3><p>A variable is live when its current value may still be read. Two values live at the same time often need different physical registers. Liveness depends on the program, not directly on K.</p></article><article class="panel guide-card"><span>03 · GRAPH COLORING</span><h3>What does a color mean?</h3><p>Each graph node is a virtual register. Edges represent interference. Assigning the same color to connected nodes would be invalid; each color corresponds to a physical register.</p></article><article class="panel guide-card"><span>04 · MEMORY SPILLING</span><h3>What if K is too small?</h3><p>The compiler rewrites chosen values using stack spill slots, then rebuilds the graph. A conservative fallback can make difficult cases work at the expense of extra memory traffic.</p></article></div>
+          <section class="panel guide-panel"><h2>Supported TAC syntax</h2><pre class="code-block">func main
+  t1 = 5               # constant
+  t2 = t1              # copy
+  t3 = t1 + t2         # arithmetic
+  if t3 &lt; 10 goto L1  # conditional branch
+  goto L2              # unconditional branch
+label L1
+  t4 = t3 * 2
+label L2
+  ret t3
+end</pre><p>Use register names <code>t1</code>, <code>t2</code>, etc. Operators include <code>+ - * / %</code> and relations <code>&lt; &lt;= &gt; &gt;= == !=</code>. Only one function is supported. Spill loads and stores are inserted internally.</p></section>
+          <section class="panel guide-panel"><h2>Scope and verification</h2><p>This is a teaching implementation of intra-procedural graph-coloring register allocation. Its reference interpreter compares the return value of the original TAC and spill-rewritten TAC where execution is bounded and supported. It does not emit machine code or verify machine execution. Results from the Complexity lab describe the Python allocator, not the runtime of compiled binaries.</p></section>
+        </section>
+        <footer class="page-footer">Register Lab · Graph-Coloring Based Register Allocator · Compiler Design project <span>Python · FastAPI · Native SVG</span></footer>
+      </main>
+    </div>
   </div>
 </body>
 </html>

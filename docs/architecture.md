@@ -35,15 +35,21 @@ Everything crosses module boundaries through two files:
 Neither should change without telling the team. Everything else inside a module is that
 owner's business.
 
-## Why the loop terminates
+## Spill convergence and the new fallback
 
-Each actual spill removes one live range from contention and replaces it with several
-very short ones (one per use). Short ranges have few interferences, so they colour
-easily. In practice convergence takes two to four iterations on every benchmark here
-(`briggs_example.tac` at K=2 is the slowest, at 4). `MAX_ITERATIONS = 10` in
-`spiller.py` is a safety net, not an expected path — see `spiller.py`'s module
-docstring for a concrete case where a naive choice of spill-cost heuristic *would*
-have broken that guarantee, and why the pipeline avoids it.
+The normal simplify/select pipeline retries with spill rewriting for at most ten
+rounds. Although individual reloads have short live ranges, this **does not
+mathematically guarantee convergence**: copy-heavy workloads can repeatedly spill
+a new reload temporary. The final release handles this particular failure mode
+with a **conservative emergency rewrite** starting from the original TAC. Every
+virtual register receives a dedicated stack slot and is reloaded at its uses;
+for the supported two-operand TAC workload this typically shrinks live ranges enough
+to color with K≥2. It costs extra memory traffic. The result's `stop_reason`
+distinguishes `success`, `conservative_spill_fallback`, and `iteration_limit`.
+
+For K=1 the original instruction language can require simultaneous register
+operands that cannot be legalized without a target-specific ISA. The fallback is
+not attempted for K=1. The pipeline is bounded in all cases.
 
 ## Measuring objective O3
 

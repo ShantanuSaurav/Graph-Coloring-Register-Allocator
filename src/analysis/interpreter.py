@@ -50,7 +50,15 @@ def execute(fn: Function, *, max_steps: int = 100_000) -> int:
         elif ins.op is Op.BINOP:
             a, b = read(ins.src1), read(ins.src2)
             try:
-                value = int(a / b) if ins.operator == "/" else _ARITH[ins.operator](a, b)
+                if ins.operator == "/":
+                    # Integer division truncates toward zero. Avoid float
+                    # conversion, which overflows on large Python integers.
+                    if b == 0:
+                        raise ZeroDivisionError("division by zero")
+                    magnitude = abs(a) // abs(b)
+                    value = -magnitude if (a < 0) != (b < 0) else magnitude
+                else:
+                    value = _ARITH[ins.operator](a, b)
             except (ZeroDivisionError, OverflowError) as exc:
                 raise ExecutionError(str(exc)) from exc
             registers[ins.dst] = value

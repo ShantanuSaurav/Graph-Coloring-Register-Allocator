@@ -64,6 +64,20 @@ def _cfg_stage(fn: Function) -> list[dict]:
     ]
 
 
+def _instruction_liveness(block) -> list[dict]:
+    """Live sets immediately before and after each instruction, in source order."""
+    live = set(block.live_out)
+    rows = []
+    for index in range(len(block.instrs) - 1, -1, -1):
+        instr = block.instrs[index]
+        after = set(live)
+        live = (live - instr.defs()) | instr.uses()
+        rows.append({"index": index, "text": str(instr),
+                     "before": sorted(live, key=_vreg_key),
+                     "after": sorted(after, key=_vreg_key)})
+    return list(reversed(rows))
+
+
 def _liveness_stage(fn: Function) -> list[dict]:
     out = []
     for b in fn.block_order():
@@ -74,6 +88,7 @@ def _liveness_stage(fn: Function) -> list[dict]:
             "def": sorted(defd, key=_vreg_key),
             "in": sorted(b.live_in, key=_vreg_key),
             "out": sorted(b.live_out, key=_vreg_key),
+            "instructions": _instruction_liveness(b),
         })
     return out
 
@@ -164,6 +179,9 @@ def analyze(req: CodeRequest):
         # every intermediate stage of every iteration via on_iteration -- the same
         # hook the CLI's --dump-* flags use, so the web view and the CLI are always
         # looking at the same real data.
+        if len(instrs) > 600:
+            return {"summary": "", "dot": "", "error":
+                    "This educational demo supports at most 600 TAC instructions per analysis."}
         k = req.k
         iterations_stage: list[dict] = []
         first_iteration: dict[str, object] = {}
@@ -180,7 +198,14 @@ def analyze(req: CodeRequest):
                 "interference": _interference_stage(graph),
                 "coalescing_trace": result.coalesce_trace,
                 "coalescing_stats": result.coalesce_stats,
-                "coloring": {v: result.colours[v] for v in sorted(result.colours, key=_vreg_key)},
+                # Resolve merged copy names, otherwise graph nodes are rendered as
+                # unexplained uncoloured circles despite sharing a register.
+                "coloring": {v: result.register_of(v) for v in sorted(graph.nodes(), key=_vreg_key)
+                             if result.register_of(v) is not None},
+                "coloring_method": result.colouring_method,
+                "simplify_stack": result.simplify_stack,
+                "optimistic_nodes": result.optimistic_nodes,
+                "coalesced_map": result.coalesced,
                 "spilling": _spill_stage(fn_i, result),
             })
 
@@ -189,6 +214,8 @@ def analyze(req: CodeRequest):
         summary += f"\nRegister allocation (K={k}):\n"
         if pipeline.success:
             summary += f"  SUCCESS after {pipeline.iterations} iteration(s)\n"
+            if pipeline.stop_reason == "conservative_spill_fallback":
+                summary += "  Used conservative full live-range spill fallback (higher memory traffic).\n"
             summary += (f"  spill load/store instructions inserted: "
                         f"{count_spill_instructions(pipeline.function)}\n")
             for v in sorted(pipeline.allocation.colours, key=_vreg_key):
@@ -225,7 +252,7 @@ def analyze(req: CodeRequest):
             semantic["reason"] = str(exc)
 
         verification = {
-            "passed": pipeline.success and not problems and semantic["passed"] is not False,
+            "passed": pipeline.success and not problems and semantic["passed"] is True,
             "semantic": semantic,
             "all_registers_handled": pipeline.success,
             "no_interfering_share_a_register": not problems,
@@ -252,6 +279,7 @@ def analyze(req: CodeRequest):
             "stages": {
                 "tac": tac_stage,
                 "iterations": iterations_stage,
+                "stop_reason": pipeline.stop_reason,
                 "final": final_stage,
             },
             "metrics": metrics.to_dict(),
@@ -285,7 +313,9 @@ def experiment(req: ExperimentRequest):
 
     try:
         # Fail fast instead of performing repeated work on invalid TAC.
-        parse(req.code)
+        checked_fn = parse(req.code)
+        if len(getattr(checked_fn, "_parsed_instrs", [])) > 300:
+            raise HTTPException(status_code=422, detail="Maximum 300 TAC instructions in experiments.")
     except ParseError as exc:
         raise HTTPException(status_code=422, detail=f'Parse error: {exc}') from exc
     if len(set(req.register_counts)) != len(req.register_counts) or any(k < 1 or k > 32 for k in req.register_counts):
@@ -317,3 +347,56 @@ def experiment(req: ExperimentRequest):
         })
     return {'samples': samples, 'repeats': req.repeats,
             'note': 'Measured Python allocator wall-time and tracemalloc peak allocations, not target-program runtime or physical register memory.'}
+
+
+class ScaleRequest(BaseModel):
+    """Bounded synthetic chain used for an empirical input-size experiment."""
+
+    sizes: list[int] = Field(default_factory=lambda: [16, 32, 64, 96, 128], min_length=2, max_length=7)
+    k: int = Field(default=4, ge=2, le=16)
+    repeats: int = Field(default=2, ge=1, le=3)
+
+
+def _synthetic_chain(size: int) -> str:
+    """Generate a stable, bounded workload with two-operand dependencies."""
+    if not 4 <= size <= 180:
+        raise ValueError("TAC input size must be 4–180 instructions.")
+    instructions = ["func study", "t1 = 1", "t2 = 2"]
+    for i in range(3, size + 1):
+        instructions.append(f"t{i} = t{i - 1} + t{i - 2}")
+    return "\n".join([*instructions, f"ret t{size}", "end"])
+
+
+@app.post('/api/scale-study')
+def scale_study(req: ScaleRequest):
+    """Median wall time/peak memory vs program size for a fixed TAC workload."""
+    import statistics
+    import time
+    import tracemalloc
+    from fastapi import HTTPException
+
+    if len(set(req.sizes)) != len(req.sizes) or any(n < 4 or n > 180 for n in req.sizes):
+        raise HTTPException(status_code=422, detail="Provide 2–7 distinct sizes from 4 to 180.")
+    measurements = []
+    for size in req.sizes:
+        code = _synthetic_chain(size)
+        elapsed, peaks = [], []
+        converged = False
+        for _ in range(req.repeats):
+            tracemalloc.start()
+            try:
+                started = time.perf_counter()
+                allocation = run_allocation(parse(code), req.k)
+                elapsed.append((time.perf_counter() - started) * 1000)
+                peaks.append(tracemalloc.get_traced_memory()[1] / 1024)
+                converged = allocation.success
+            finally:
+                tracemalloc.stop()
+        measurements.append({
+            "size": size, "runtime_ms": round(statistics.median(elapsed), 4),
+            "peak_memory_kib": round(statistics.median(peaks), 2),
+            "success": converged,
+        })
+    return {"samples": measurements, "k": req.k, "repeats": req.repeats,
+            "workload": "Synthetic two-operand dependency chain",
+            "note": "Empirical Python allocator measurements; not an asymptotic complexity proof."}

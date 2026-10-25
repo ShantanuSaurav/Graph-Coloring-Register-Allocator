@@ -1,70 +1,140 @@
-# Register Lab — Graph-Coloring Register Allocator
+# Register Lab
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Vercel-blue?style=flat-square&logo=vercel)](https://graph-coloring-register-allocator-ipw62459k.vercel.app/)
+**A graph-coloring register allocator and interactive Compiler Design workbench**
 
-An interactive **Chaitin–Briggs register-allocation compiler workbench** for custom three-address code (TAC). Parse, build a control-flow graph, calculate liveness, construct the interference graph, coalesce safe moves, color virtual registers, and rewrite spills.
+Register Lab is an educational implementation of Chaitin–Briggs graph-coloring register allocation for one function written in three-address code (TAC). It builds a control-flow graph (CFG), solves liveness data flow, creates an interference graph, coalesces safe moves, assigns physical registers, and inserts stack spills when required.
 
-> 🚀 **Live Demo:** [https://graph-coloring-register-allocator-ipw62459k.vercel.app/](https://graph-coloring-register-allocator-ipw62459k.vercel.app/)
+The project contains a **working Python compiler core**, **FastAPI endpoints**, and a **self-contained website**. Graphs are drawn as native browser SVG—no Graphviz server, CDN, D3, or remote JavaScript is required.
 
-## Features
+![Allocation explorer screenshot](docs/ui_1440_graph.png)
 
-| Workspace | Description |
+## What you can explore
+
+| Workspace | What it teaches |
 |---|---|
-| Allocation explorer | Interactive CFG and interference graphs rendered in native SVG, liveness sets, virtual-to-physical register mappings, spill transformations, iteration selection and verification |
-| Complexity lab | Repeatable measurements of allocator wall-time and peak traced Python memory for different physical register budgets, plotted and downloadable as CSV |
-| Register banks | Group physical registers into visual boxes and inspect which virtual registers map into each group |
+| **Allocation explorer** | Run editable TAC, inspect interference and CFG diagrams, view instruction-level liveness, walk the coloring stack, explore spill rewrites, check the resulting program, and save SVG / JSON |
+| **Complexity analysis** | Measure wall-clock time and peak traced Python memory while varying K; independently study measured time and space versus synthetic program size; export CSV |
+| **Register banks** | Group physical registers into boxes of 2, 4, or 8 and inspect virtual-to-physical mappings |
+| **Learning guide** | A simple four-step walkthrough, TAC grammar examples, pipeline explanations, and limits of the educational model |
 
-**Note:** The register bank view groups register assignments for visualization; it does not implement segmented memory or register-bank hardware constraints. Complexity measurements are empirical allocator overhead, not compiled TAC execution time and not an asymptotic Big-O guarantee.
+**Important distinctions:** Liveness of the **original TAC** does not change merely because K changes. Later spill-rewritten iterations can have different liveness. Register banks are **visual groups**, not hardware memory segmentation. Complexity charts describe allocator overhead, **not** the runtime of compiled code or a proof of Big-O complexity.
 
-## Run locally
+## Quick start
 
-Prerequisites: Python 3.11+ (3.11–3.13 tested in CI).
+Python **3.11 or newer** recommended (CI covers 3.11–3.13).
 
-```bash
-python -m venv .venv
-# Windows PowerShell: .venv\Scripts\Activate.ps1
-# macOS/Linux: source .venv/bin/activate
+**Windows PowerShell:**
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-python -m pytest
+python -m pytest -q
 python scripts/dev_server.py
 ```
 
-Open **http://127.0.0.1:8000**.
+**Linux / macOS:**
 
-The web application calls the real Python allocation pipeline; it is not a mock or graph-only demonstration.
-
-## Web API
-
-- `POST /api/analyze` with `{"code": "func main\n t1 = 1\n ret t1\nend", "k": 4, "coalescing": true}`.
-- `POST /api/experiment` with `{"code": "...", "register_counts": [2,3,4,6,8], "repeats": 3, "coalescing": true}`.
-
-For the CLI, try `python -m src.cli --help`.
-
-## Structure
-
-```text
-api/             FastAPI endpoints for interactive analysis and experiments
-src/frontend/    TAC parser and CFG construction
-src/analysis/    Liveness, interference graph and execution interpreter
-src/colouring/   Briggs coalescing and simplify/select
-src/spilling/    Spill rewrite and allocation retry loop
-public/          Responsive dependency-free web dashboard
-benchmarks/      TAC workloads
-scripts/         Local web server, benchmarks and experiment utilities
-tests/           Python regression suite
-docs/            Architecture and academic notes
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m pytest -q
+python scripts/dev_server.py
 ```
 
-## Deploy & Live Demo
+Open **http://127.0.0.1:8000** and choose **Simple → Run analysis**. No API key or external web services are needed.
 
-- **Live Application:** [https://graph-coloring-register-allocator-ipw62459k.vercel.app/](https://graph-coloring-register-allocator-ipw62459k.vercel.app/)
+## Guided demo
 
-The repository includes `vercel.json` for Vercel's Python API and static assets. Import the GitHub repository into Vercel, configure Python support, and confirm the rewrite rules and API routes.
+1. Open **Allocation explorer** and select **Simple**. Observe the interference graph and the isolated variables below it.
+2. Choose **Liveness** to inspect values live before and after individual TAC instructions. The block-level IN and OUT values can still be empty for a straight-line block.
+3. Load **High pressure** and set K=2. Switch through allocation iterations to see the spill rewrite and eventual register assignments.
+4. Load **Copy heavy** at K=2. The ordinary retry heuristic may fail to converge, but an intentionally conservative final strategy can complete the allocation by inserting extra memory operations. See the warning under **Final output**.
+5. Go to **Complexity analysis**. Run Experiment A to vary the register budget; run Experiment B to vary the input size. Interpretation and limitations are described beside the charts.
+6. Open **Register banks** to inspect R0–R(K−1) arranged into groups.
 
-## Testing and project scope
+For supported TAC syntax, open **Learning guide** in the website or see [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md).
 
-Run `python -m pytest -q`. The presentation reviews define an **intra-procedural teaching compiler** rather than a full architecture-specific machine-code backend. See [docs/REDESIGN.md](docs/REDESIGN.md) and [docs/architecture.md](docs/architecture.md) for design and known limitations.
+## Compiler pipeline
 
-## Academic sources
+```text
+TAC source
+    ↓  recursive-descent parser
+basic blocks and control-flow graph
+    ↓  backward liveness fixed point
+interference graph + copy candidates
+    ↓  Briggs conservative coalescing
+simplify → select → bounded exact fallback for small graphs
+    ├── success → register mapping
+    └── spill → insert loads/stores → rebuild CFG and retry
+                  ↓
+        conservative full live-range spill fallback, if needed (K ≥ 2)
+                  ↓
+            verification and final TAC
+```
 
-The accompanying Review 1 and Review 2 materials document the objectives, implementation stages, benchmark methodology, and future work. Key background: Chaitin (1982), Briggs et al. (1994), and Aho et al., *Compilers: Principles, Techniques, and Tools*.
+The conservative spill fallback is **not** an optimal register allocator. It intentionally favors finishing the educational allocation over minimizing memory traffic. Cases with K=1 and two-operand instructions may still be infeasible; the pipeline returns an explicit retry-limit state rather than inventing a solution.
+
+The reference TAC interpreter compares the return values before and after spill rewriting for terminating programs within a bounded instruction limit. This **does not** prove machine-code correctness; no machine-code backend or target-ISA register constraints are implemented.
+
+## Project layout
+
+```text
+api/                 FastAPI allocation, register-budget and input-size experiments
+src/frontend/        TAC tokenizer/parser and CFG
+src/analysis/        Liveness, interference, bounded reference interpreter
+src/colouring/       Briggs coalescing, simplify/select, DSATUR fallback
+src/spilling/        Spilling, rewriting and retry pipeline
+src/metrics.py       Shared allocation metrics
+public/              Standalone website, styles and local SVG renderer
+public/examples/     Browser-loadable TAC examples (bundled for deployment)
+benchmarks/          Benchmark fixture source files
+scripts/             CLI/web server, profiling and benchmark commands
+tests/               Unit, randomized-semantic, API and release regression tests
+docs/                Architecture, guided usage, academic review materials
+.github/workflows/   Python test workflow
+```
+
+## Commands and API
+
+```bash
+python -m src.cli --help
+python scripts/run_benchmarks.py
+python scripts/profile_allocator.py --repeat 7 --output allocator_profile.csv
+```
+
+Endpoints exposed by the FastAPI app:
+
+- `POST /api/analyze` — `{ "code": "func main\n t1 = 1\n ret t1\nend", "k": 4, "coalescing": true }`
+- `POST /api/experiment` — `{ "code": "...", "register_counts": [2,3,4,6,8], "repeats": 3, "coalescing": true }`
+- `POST /api/scale-study` — `{ "sizes": [16,32,64,96,128], "k": 4, "repeats": 2 }`
+
+Public demo endpoints have size limits to bound compute work. Program code must be valid custom TAC; this is not a general C, Java or Python compiler.
+
+## Deploy on Vercel
+
+1. Push the *contents* of this folder to your GitHub repository (not the enclosing ZIP file).
+2. Go to Vercel → **Add New Project**, import that repository, and use the repository root as the project root.
+3. Deploy using Vercel's supported Python/FastAPI functions and static `public/` content. The project supplies `api/index.py` and `vercel.json`.
+4. Verify the landing page, `POST /api/analyze`, `POST /api/experiment`, `POST /api/scale-study`, and `/examples/simple.tac` on the deployment domain.
+5. Run the **Simple**, **Diamond**, **High pressure** and **Copy heavy** examples in the deployed browser. If a route fails, inspect your deployment's serverless function logs before changing routing.
+
+**No deployment URL is hard-coded** because each newly imported Vercel project receives its own address. Local tests do not establish that a separate production deployment is working.
+
+## Tests and reproducibility
+
+```bash
+python -m pytest -q
+node --check public/script.js  # optional: requires Node.js
+```
+
+Tests cover parsing, CFG, liveness, interference, coalescing, spilling, interpreter equivalence, API responses, and complexity-study validation. Python 3.11–3.13 test runs are configured in GitHub Actions. See [`docs/FINAL_RELEASE.md`](docs/FINAL_RELEASE.md) for tested behavior and known limits.
+
+## Academic scope and references
+
+This project follows the aims of the attached **Review 1 (Initial Design, Planning & Feasibility)** and **Review 2 (Implementation, Testing & Deployment)**. The reviews are included in `docs/reviews/`.
+
+Background: Chaitin (1982), Briggs, Cooper & Torczon (1994), George & Appel (1996), and Aho et al., *Compilers: Principles, Techniques, and Tools* (2nd ed.).
+
+**Repository:** [Graph-Coloring-Register-Allocator](https://github.com/ShantanuSaurav/Graph-Coloring-Register-Allocator)

@@ -36,8 +36,9 @@ For a spilled vreg v, allocate a stack slot, then:
   - before every instruction that uses v,  insert   `v' = load slot`  with a FRESH
     vreg name for each use
 
-Using a fresh name per use is what makes this terminate: the new live ranges are only
-one or two instructions long, so they interfere with almost nothing and colour easily.
+Using a fresh name per use usually helps convergence: the new live ranges are only
+one or two instructions long, so they interfere with fewer values and are easier to colour. A final
+conservative spill fallback is available for difficult K>=2 cases.
 Reusing the same name would leave a long live range and the loop could spin forever.
 
 Then the whole pipeline runs again: rebuild the CFG, recompute liveness, rebuild the
@@ -205,6 +206,7 @@ class PipelineResult:
     allocation: AllocationResult       # colouring/spill result of the final attempt
     iterations: int                    # how many allocate-then-maybe-spill rounds ran
     spilled_history: list[set[str]] = field(default_factory=list)
+    stop_reason: str = ""  # success, iteration_limit, or a future explicit stop condition
 
     @property
     def success(self) -> bool:
@@ -260,7 +262,7 @@ def run_allocation(
             on_iteration(iteration, current, graph, result)
 
         if result.success:
-            return PipelineResult(current, graph, result, iteration, spilled_history)
+            return PipelineResult(current, graph, result, iteration, spilled_history, "success")
 
         spilled_history.append(set(result.spilled))
         # The final attempt has not analysed or coloured the next rewritten IR.
@@ -269,4 +271,30 @@ def run_allocation(
             current = rewrite_with_spills(current, result.spilled)
 
     assert result is not None and graph is not None  # loop always runs >= 1 time
-    return PipelineResult(current, graph, result, max_iterations, spilled_history)
+
+    # The greedy rewrite may repeatedly spill reload temporaries instead of the
+    # long live ranges responsible for pressure. As a safe, *last resort*, split
+    # every original virtual register at each use/def by keeping its value in a
+    # dedicated spill slot. This trades extra memory operations for a compact
+    # per-instruction live range. Crucially start from the ORIGINAL program:
+    # rewriting previous retries again only compounds redundant loads/stores.
+    # A two-source TAC instruction may need two registers at once, so do not
+    # claim this solves K=1 or unsupported target instruction constraints.
+    if k >= 2 and max_iterations >= 2:
+        original_regs = {v for ins in _flat_instrs(fn) for v in ins.defs() | ins.uses()}
+        if original_regs:
+            fallback = rewrite_with_spills(fn, original_regs)
+            build_cfg(fallback)
+            compute_loop_depth(fallback)
+            analyse(fallback)
+            fallback_graph = build_graph(fallback)
+            fallback_result = allocate(fallback_graph, k, do_coalesce=False)
+            if on_iteration is not None:
+                on_iteration(max_iterations + 1, fallback, fallback_graph, fallback_result)
+            if fallback_result.success and not fallback_result.verify(fallback_graph):
+                return PipelineResult(
+                    fallback, fallback_graph, fallback_result,
+                    max_iterations + 1, spilled_history, "conservative_spill_fallback",
+                )
+
+    return PipelineResult(current, graph, result, max_iterations, spilled_history, "iteration_limit")
